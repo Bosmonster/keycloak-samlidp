@@ -34,12 +34,14 @@ import org.keycloak.dom.saml.v2.assertion.AssertionType;
 import org.keycloak.dom.saml.v2.assertion.AuthnStatementType;
 import org.keycloak.dom.saml.v2.assertion.NameIDType;
 import org.keycloak.dom.saml.v2.assertion.SubjectType;
+import org.keycloak.dom.saml.v2.metadata.AttributeConsumingService;
 import org.keycloak.dom.saml.v2.metadata.AttributeConsumingServiceType;
 import org.keycloak.dom.saml.v2.metadata.EndpointType;
 import org.keycloak.dom.saml.v2.metadata.EntityDescriptorType;
 import org.keycloak.dom.saml.v2.metadata.KeyDescriptorType;
 import org.keycloak.dom.saml.v2.metadata.KeyTypes;
 import org.keycloak.dom.saml.v2.metadata.LocalizedNameType;
+import org.keycloak.dom.saml.v2.metadata.RequestedAttributeType;
 import org.keycloak.dom.saml.v2.protocol.ArtifactResolveType;
 import org.keycloak.dom.saml.v2.protocol.AuthnRequestType;
 import org.keycloak.dom.saml.v2.protocol.LogoutRequestType;
@@ -64,12 +66,14 @@ import org.keycloak.protocol.saml.mappers.SamlMetadataDescriptorUpdater;
 import org.keycloak.protocol.saml.preprocessor.SamlAuthenticationPreprocessor;
 import org.keycloak.protocol.saml.SAMLEncryptionAlgorithms;
 import org.keycloak.protocol.saml.profile.util.Soap;
+import org.keycloak.saml.SAML2ArtifactResolutionBuilder;
 import org.keycloak.saml.SAML2ArtifactResolveRequestBuilder;
 import org.keycloak.saml.SAML2AuthnRequestBuilder;
 import org.keycloak.saml.SAML2LogoutRequestBuilder;
 import org.keycloak.saml.SAML2NameIDPolicyBuilder;
 import org.keycloak.saml.SAML2RequestedAuthnContextBuilder;
 import org.keycloak.saml.SPMetadataDescriptor;
+import org.keycloak.saml.SPMetadataDescriptorBuilder;
 import org.keycloak.saml.SamlProtocolExtensionsAwareBuilder.NodeGenerator;
 import org.keycloak.saml.SignatureAlgorithm;
 import org.keycloak.saml.common.constants.GeneralConstants;
@@ -77,10 +81,14 @@ import org.keycloak.saml.common.constants.JBossSAMLURIConstants;
 import org.keycloak.saml.common.exceptions.ConfigurationException;
 import org.keycloak.saml.common.exceptions.ParsingException;
 import org.keycloak.saml.common.exceptions.ProcessingException;
+import org.keycloak.saml.common.util.DocumentUtil;
+import org.keycloak.saml.common.util.StaxUtil;
 import org.keycloak.saml.processing.api.saml.v2.request.SAML2Request;
 import org.keycloak.saml.processing.api.saml.v2.response.SAML2Response;
+import org.keycloak.saml.processing.api.saml.v2.sig.SAML2Signature;
 import org.keycloak.saml.processing.core.saml.v2.common.SAMLDocumentHolder;
 import org.keycloak.saml.processing.core.saml.v2.util.SAMLMetadataUtil;
+import org.keycloak.saml.processing.core.saml.v2.writers.SAMLMetadataWriter;
 import org.keycloak.saml.processing.core.util.KeycloakKeySamlExtensionGenerator;
 import org.keycloak.saml.validators.DestinationValidator;
 import org.keycloak.sessions.AuthenticationSessionModel;
@@ -93,8 +101,15 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriBuilder;
 import jakarta.ws.rs.core.UriInfo;
+import org.w3c.dom.Node;
+
+import javax.xml.crypto.dsig.CanonicalizationMethod;
 import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.stream.XMLStreamWriter;
+import java.io.IOException;
+import java.io.StringWriter;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.security.KeyPair;
 import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
@@ -106,6 +121,8 @@ import java.util.List;
 import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.stream.Collectors;
+
+import static org.keycloak.saml.common.constants.JBossSAMLURIConstants.ATTRIBUTE_FORMAT_BASIC;
 
 /**
  * @author Pedro Igor
@@ -354,30 +371,77 @@ public class SAMLIdentityProvider extends AbstractIdentityProvider<SAMLIdentityP
         return binding;
     }
 
+    public String resolveArtifact(String artifact, String issuerURL, RealmModel realm) {
+        String response = "";
+        try {
+            SAML2ArtifactResolutionBuilder builder = new SAML2ArtifactResolutionBuilder()
+                    .artifact(artifact)
+                    .issuer(issuerURL);
+
+            JaxrsSAML2BindingBuilder binding = new JaxrsSAML2BindingBuilder(session, getConfig());
+            if (getConfig().isSignArtifactResolutionRequest()) {
+                KeyManager.ActiveRsaKey keys = session.keys().getActiveRsaKey(realm);
+
+                KeyPair keypair = new KeyPair(keys.getPublicKey(), keys.getPrivateKey());
+
+                String keyName = getConfig().getXmlSigKeyInfoKeyNameTransformer().getKeyName(keys.getKid(), keys.getCertificate());
+                binding.signWith(keyName, keypair);
+                binding.signatureAlgorithm(getSignatureAlgorithm());
+                binding.signDocument();
+            }
+
+            URI artifactResolutionEndpoint = new URI(getConfig().getArtifactResolutionEndpoint());
+            response = binding.postBinding(builder.toDocument()).artifactResolutionRequest(artifactResolutionEndpoint, realm);
+        } catch (ProcessingException | IOException | URISyntaxException e) {
+            logger.warn("Cannot resolve SAMLArtifact returning empty response");
+            logger.warn(e.getMessage(), e);
+        }
+
+        return response;
+    }
+
     @Override
     public Response export(UriInfo uriInfo, RealmModel realm, String format) {
         try
         {
-            URI endpoint = uriInfo.getBaseUriBuilder()
+            List<URI> endpoints = new ArrayList();
+            endpoints.add(uriInfo.getBaseUriBuilder()
+                    .path("realms").path(realm.getName())
+                    .path("broker")
+                    .path(getConfig().getAlias())
+                    .path("endpoint")
+                    .build());
+
+            List<String> linkedProviders = getConfig().getLinkedProviders();
+            if (!linkedProviders.isEmpty()) {
+                for (String linkedProvider : linkedProviders) {
+                    endpoints.add(uriInfo.getBaseUriBuilder()
+                            .path("realms").path(realm.getName())
+                            .path("broker")
+                            .path(linkedProvider)
+                            .path("endpoint")
+                            .build());
+                }
+            }
+
+            URI authnResponseBinding = JBossSAMLURIConstants.SAML_HTTP_REDIRECT_BINDING.getUri();
+            if (getConfig().isPostBindingAuthnRequest()) {
+                authnResponseBinding = JBossSAMLURIConstants.SAML_HTTP_POST_BINDING.getUri();
+            }
+
+            URI artifactBinding = JBossSAMLURIConstants.SAML_SOAP_BINDING.getUri();
+            URI logoutBinding = JBossSAMLURIConstants.SAML_HTTP_REDIRECT_BINDING.getUri();
+
+            if (getConfig().isPostBindingLogout()) {
+                logoutBinding = JBossSAMLURIConstants.SAML_HTTP_POST_BINDING.getUri();
+            }
+
+            URI artifactEndpoint = uriInfo.getBaseUriBuilder()
                     .path("realms").path(realm.getName())
                     .path("broker")
                     .path(getConfig().getAlias())
                     .path("endpoint")
                     .build();
-
-            List<EndpointType> assertionConsumerServices = getConfig().isPostBindingAuthnRequest()
-                    ? List.of(new EndpointType(JBossSAMLURIConstants.SAML_HTTP_POST_BINDING.getUri(), endpoint),
-                            new EndpointType(JBossSAMLURIConstants.SAML_HTTP_REDIRECT_BINDING.getUri(), endpoint),
-                            new EndpointType(JBossSAMLURIConstants.SAML_HTTP_ARTIFACT_BINDING.getUri(), endpoint))
-                    : List.of(new EndpointType(JBossSAMLURIConstants.SAML_HTTP_REDIRECT_BINDING.getUri(), endpoint),
-                            new EndpointType(JBossSAMLURIConstants.SAML_HTTP_POST_BINDING.getUri(), endpoint),
-                            new EndpointType(JBossSAMLURIConstants.SAML_HTTP_ARTIFACT_BINDING.getUri(), endpoint));
-
-            List<EndpointType> singleLogoutServices = getConfig().isPostBindingLogout()
-                    ? List.of(new EndpointType(JBossSAMLURIConstants.SAML_HTTP_POST_BINDING.getUri(), endpoint),
-                            new EndpointType(JBossSAMLURIConstants.SAML_HTTP_REDIRECT_BINDING.getUri(), endpoint))
-                    : List.of(new EndpointType(JBossSAMLURIConstants.SAML_HTTP_REDIRECT_BINDING.getUri(), endpoint),
-                            new EndpointType(JBossSAMLURIConstants.SAML_HTTP_POST_BINDING.getUri(), endpoint));
 
             boolean wantAuthnRequestsSigned = getConfig().isWantAuthnRequestsSigned();
             boolean wantAssertionsSigned = getConfig().isWantAssertionsSigned();
@@ -422,59 +486,120 @@ public class SAMLIdentityProvider extends AbstractIdentityProvider<SAMLIdentityP
                     })
                     .collect(Collectors.toList());
 
-            EntityDescriptorType entityDescriptor = SPMetadataDescriptor.buildSPDescriptor(
-                assertionConsumerServices, singleLogoutServices,
-                wantAuthnRequestsSigned, wantAssertionsSigned, wantAssertionsEncrypted,
-                entityId, nameIDPolicyFormat, signingKeys, encryptionKeys);
+            // Prepare the metadata descriptor model
+            StringWriter sw = new StringWriter();
+            XMLStreamWriter writer = StaxUtil.getXMLStreamWriter(sw);
+            SAMLMetadataWriter metadataWriter = new SAMLMetadataWriter(writer);
 
-            // Create the AttributeConsumingService if at least one attribute importer mapper exists
-            List<Entry<IdentityProviderMapperModel, SamlMetadataDescriptorUpdater>> metadataAttrProviders = new ArrayList<>();
-            session.identityProviders().getMappersByAliasStream(getConfig().getAlias())
-                .forEach(mapper -> {
-                    IdentityProviderMapper target = (IdentityProviderMapper) session.getKeycloakSessionFactory().getProviderFactory(IdentityProviderMapper.class, mapper.getIdentityProviderMapper());
-                    if (target instanceof SamlMetadataDescriptorUpdater samlMetadataDescriptorUpdater)
-                        metadataAttrProviders.add(new java.util.AbstractMap.SimpleEntry<>(mapper, samlMetadataDescriptorUpdater));
-                });
-
-            if (!metadataAttrProviders.isEmpty()) {
-                int attributeConsumingServiceIndex = getConfig().getAttributeConsumingServiceIndex() != null ? getConfig().getAttributeConsumingServiceIndex() : 1;
-                String attributeConsumingServiceName = getConfig().getAttributeConsumingServiceName();
-                //default value for attributeConsumingServiceName
-                if (attributeConsumingServiceName == null)
-                    attributeConsumingServiceName = realm.getDisplayName() != null ? realm.getDisplayName() : realm.getName() ;
-                AttributeConsumingServiceType attributeConsumingService = new AttributeConsumingServiceType(attributeConsumingServiceIndex);
-                attributeConsumingService.setIsDefault(true);
-
-                String currentLocale = realm.getDefaultLocale() == null ? "en" : realm.getDefaultLocale();
-                LocalizedNameType attributeConsumingServiceNameElement = new LocalizedNameType(currentLocale);
-                attributeConsumingServiceNameElement.setValue(attributeConsumingServiceName);
-                attributeConsumingService.addServiceName(attributeConsumingServiceNameElement);
-
-                // Look for the SP descriptor and add the attribute consuming service
-                for (EntityDescriptorType.EDTChoiceType choiceType : entityDescriptor.getChoiceType()) {
-                    List<EntityDescriptorType.EDTDescriptorChoiceType> descriptors = choiceType.getDescriptors();
-                    for (EntityDescriptorType.EDTDescriptorChoiceType descriptor : descriptors) {
-                        descriptor.getSpDescriptor().addAttributeConsumerService(attributeConsumingService);
-                    }
-                }
-
-                // Add the attribute mappers
-                metadataAttrProviders.forEach(mapper -> {
-                    SamlMetadataDescriptorUpdater metadataAttrProvider = mapper.getValue();
-                    metadataAttrProvider.updateMetadata(mapper.getKey(), entityDescriptor);
-                });
+            Integer defaultAssertionEndpointIndex = getConfig().getAssertionConsumingServiceIndex();
+            if (defaultAssertionEndpointIndex == null) {
+                defaultAssertionEndpointIndex = 1;
             }
 
-            String descriptor;
+            SPMetadataDescriptorBuilder spMetadataDescriptorBuilder = new SPMetadataDescriptorBuilder()
+                    .loginBinding(authnResponseBinding)
+                    .logoutBinding(logoutBinding)
+                    .assertionEndpoints(endpoints)
+                    .defaultAssertionEndpoint(defaultAssertionEndpointIndex)
+                    .logoutEndpoints(endpoints)
+                    .wantAuthnRequestsSigned(wantAuthnRequestsSigned)
+                    .wantAssertionsSigned(wantAssertionsSigned)
+                    .wantAssertionsEncrypted(wantAssertionsEncrypted)
+                    .entityId(entityId)
+                    .nameIDPolicyFormat(nameIDPolicyFormat)
+                    .signingCerts(signingKeys)
+                    .encryptionCerts(encryptionKeys);
+            if (getConfig().isIncludeArtifactResolutionServiceMetadata()) {
+                spMetadataDescriptorBuilder.artifactResolutionBinding(artifactBinding)
+                        .artifactResolutionEndpoint(artifactEndpoint);
+            }
+            if (getConfig().getMetadataValidUntilUnit() != null && getConfig().getMetadataValidUntilPeriod() != null) {
+                logger.debugf("Valid Until set for Metadata. Setting valid until current date + %s %s",
+                        getConfig().getMetadataValidUntilUnit(), getConfig().getMetadataValidUntilPeriod());
+                spMetadataDescriptorBuilder
+                        .metadataValidUntilUnit(getConfig().getMetadataValidUntilUnit())
+                        .metadataValidUntilPeriod(getConfig().getMetadataValidUntilPeriod());
+            }
+            EntityDescriptorType entityDescriptor = spMetadataDescriptorBuilder.build();
+
+            // Assuming AttributeConsumingServiceType.getServices() returns a list of AttributeConsumingService objects.
+            List<AttributeConsumingService> attributeValues = AttributeConsumingServiceType.getAttributeConsumingServices();
+            if (attributeValues != null && !attributeValues.isEmpty()) {
+                int attributeConsumingServiceIndex = 1;
+                int defaultAttributeConsumingServiceIndex = (getConfig().getAttributeConsumingServiceIndex() != null && getConfig().getAttributeConsumingServiceIndex() > 0) ? getConfig().getAttributeConsumingServiceIndex() : 1;
+
+                for (AttributeConsumingService config : attributeValues) {
+                    String attributeConsumingServiceName = config.getServiceName();
+                    if (attributeConsumingServiceName == null) {
+                        attributeConsumingServiceName = realm.getDisplayName() != null ? realm.getDisplayName() : realm.getName();
+                    }
+
+                    AttributeConsumingServiceType attributeConsumingService = new AttributeConsumingServiceType(attributeConsumingServiceIndex);
+                    attributeConsumingService.setIsDefault(attributeConsumingServiceIndex == defaultAttributeConsumingServiceIndex);
+
+                    String currentLocale = realm.getDefaultLocale() == null ? "en" : realm.getDefaultLocale();
+                    LocalizedNameType attributeConsumingServiceNameElement = new LocalizedNameType(currentLocale);
+                    attributeConsumingServiceNameElement.setValue(attributeConsumingServiceName);
+                    attributeConsumingService.addServiceName(attributeConsumingServiceNameElement);
+
+                    String attributeName = config.getAttributeName();
+                    String attributeFriendlyName = config.getFriendlyName();
+                    String attributeValue = config.getAttributeValue();
+
+                    RequestedAttributeType requestedAttribute = new RequestedAttributeType(attributeName);
+                    requestedAttribute.setIsRequired(null);
+                    requestedAttribute.setNameFormat(ATTRIBUTE_FORMAT_BASIC.get());
+
+                    if (attributeFriendlyName != null && !attributeFriendlyName.isEmpty()) {
+                        requestedAttribute.setFriendlyName(attributeFriendlyName);
+                    }
+
+                    if (attributeValue != null && !attributeValue.isEmpty()) {
+                        requestedAttribute.addAttributeValue(attributeValue);
+                    }
+
+                    boolean alreadyPresent = attributeConsumingService.getRequestedAttribute().stream()
+                            .anyMatch(t -> (attributeName == null || attributeName.equalsIgnoreCase(t.getName())) &&
+                                    (attributeFriendlyName == null || attributeFriendlyName.equalsIgnoreCase(t.getFriendlyName())));
+
+                    if (!alreadyPresent) {
+                        attributeConsumingService.addRequestedAttribute(requestedAttribute);
+                    }
+
+                    for (EntityDescriptorType.EDTChoiceType choiceType : entityDescriptor.getChoiceType()) {
+                        List<EntityDescriptorType.EDTDescriptorChoiceType> descriptors = choiceType.getDescriptors();
+                        for (EntityDescriptorType.EDTDescriptorChoiceType descriptor : descriptors) {
+                            descriptor.getSpDescriptor().addAttributeConsumerService(attributeConsumingService);
+                        }
+                    }
+
+                    attributeConsumingServiceIndex++;
+                }
+            }
+
+            metadataWriter.writeEntityDescriptor(entityDescriptor);
+
+            String descriptor = sw.toString();
 
             // Metadata signing
             if (getConfig().isSignSpMetadata()) {
-                KeyWrapper keyWrapper = session.keys().getActiveKey(realm, KeyUse.SIG, Algorithm.RS256);
-                X509Certificate certificate = keyWrapper.getCertificate();
-                String keyName = getConfig().getXmlSigKeyInfoKeyNameTransformer().getKeyName(keyWrapper.getKid(), certificate);
-                KeyPair keyPair = new KeyPair(certificate.getPublicKey(), (PrivateKey) keyWrapper.getPrivateKey());;
+                KeyManager.ActiveRsaKey activeKey = session.keys().getActiveRsaKey(realm);
+                X509Certificate certificate = activeKey.getCertificate();
+                String keyName = getConfig().getXmlSigKeyInfoKeyNameTransformer().getKeyName(activeKey.getKid(), certificate);
+                KeyPair keyPair = new KeyPair(activeKey.getPublicKey(), activeKey.getPrivateKey());
 
-                descriptor = SAMLMetadataUtil.signEntityDescriptorType(entityDescriptor, getSignatureAlgorithm(), keyName, certificate, keyPair);
+                Document metadataDocument = DocumentUtil.getDocument(descriptor);
+                SAML2Signature signatureHelper = new SAML2Signature();
+                signatureHelper.setSignatureMethod(getSignatureAlgorithm().getXmlSignatureMethod());
+                signatureHelper.setDigestMethod(getSignatureAlgorithm().getXmlSignatureDigestMethod());
+                signatureHelper.setX509Certificate(certificate);
+
+                Node nextSibling = metadataDocument.getDocumentElement().getFirstChild();
+                signatureHelper.setNextSibling(nextSibling);
+
+                signatureHelper.signSAMLDocument(metadataDocument, keyName, keyPair, CanonicalizationMethod.EXCLUSIVE);
+
+                descriptor = DocumentUtil.getDocumentAsString(metadataDocument);
             } else {
                 descriptor = SAMLMetadataUtil.writeEntityDescriptorType(entityDescriptor);
             }

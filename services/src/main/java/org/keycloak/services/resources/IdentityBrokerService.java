@@ -134,7 +134,7 @@ import static org.keycloak.broker.provider.AbstractIdentityProvider.BROKER_REGIS
 public class IdentityBrokerService implements IdentityProvider.AuthenticationCallback {
 
     // Authentication session note, which references identity provider that is currently linked
-    public static final String LINKING_IDENTITY_PROVIDER = "LINKING_IDENTITY_PROVIDER";
+    private static final String LINKING_IDENTITY_PROVIDER = "LINKING_IDENTITY_PROVIDER";
 
     private static final Logger logger = Logger.getLogger(IdentityBrokerService.class);
 

@@ -21,6 +21,9 @@ import org.keycloak.broker.provider.AbstractIdentityProviderMapper;
 import org.keycloak.broker.provider.BrokeredIdentityContext;
 import org.keycloak.broker.saml.SAMLEndpoint;
 import org.keycloak.broker.saml.SAMLIdentityProviderFactory;
+import org.keycloak.crypto.Algorithm;
+import org.keycloak.crypto.KeyUse;
+import org.keycloak.crypto.KeyWrapper;
 import org.keycloak.dom.saml.v2.assertion.AssertionType;
 import org.keycloak.dom.saml.v2.assertion.AttributeStatementType;
 import org.keycloak.dom.saml.v2.assertion.AttributeType;
@@ -34,6 +37,7 @@ import org.keycloak.models.UserModel;
 import org.keycloak.models.utils.KeycloakModelUtils;
 import org.keycloak.provider.ProviderConfigProperty;
 
+import java.security.PrivateKey;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -70,6 +74,8 @@ public class UsernameTemplateMapper extends AbstractIdentityProviderMapper {
     private static final List<ProviderConfigProperty> configProperties = new ArrayList<ProviderConfigProperty>();
     private static final Set<IdentityProviderSyncMode> IDENTITY_PROVIDER_SYNC_MODES = new HashSet<>(Arrays.asList(IdentityProviderSyncMode.values()));
 
+    private static KeyWrapper keys;
+
     static {
         ProviderConfigProperty property;
         property = new ProviderConfigProperty();
@@ -94,6 +100,7 @@ public class UsernameTemplateMapper extends AbstractIdentityProviderMapper {
         TRANSFORMERS.put("uppercase", String::toUpperCase);
         TRANSFORMERS.put("lowercase", String::toLowerCase);
         TRANSFORMERS.put("localpart", UsernameTemplateMapper::getEmailLocalPart);
+        TRANSFORMERS.put("decrypt", UsernameTemplateMapper::decrypt);
     }
 
     public static final String PROVIDER_ID = "saml-username-idp-mapper";
@@ -105,6 +112,18 @@ public class UsernameTemplateMapper extends AbstractIdentityProviderMapper {
         } else {
             return email;
         }
+    }
+
+    public static String decrypt(Object attribute) {
+        try {
+            if(attribute instanceof SamlEncryptedId) {
+                NameIDType nameID = SamlDecrypter.decryptToNameID((SamlEncryptedId)attribute, (PrivateKey) keys.getPrivateKey());
+                return nameID.getValue();
+            }
+        } catch (DecryptionException e) {
+            logger.errorf("Error decrypting attribute `%s`", attribute, e);
+        }
+        return attribute.toString();
     }
 
     @Override
@@ -154,6 +173,7 @@ public class UsernameTemplateMapper extends AbstractIdentityProviderMapper {
 
     @Override
     public void preprocessFederatedIdentity(KeycloakSession session, RealmModel realm, IdentityProviderMapperModel mapperModel, BrokeredIdentityContext context) {
+        keys = session.keys().getActiveKey(realm, KeyUse.SIG, Algorithm.RS256);
         setUserNameFromTemplate(mapperModel, context);
     }
 
@@ -163,7 +183,8 @@ public class UsernameTemplateMapper extends AbstractIdentityProviderMapper {
         Matcher m = SUBSTITUTION.matcher(template);
         StringBuffer sb = new StringBuffer();
         while (m.find()) {
-            String variable = m.group(1);
+            String variable = m.group(1).trim();
+            String transformerKey = m.group(2);
             UnaryOperator<String> transformer = Optional.ofNullable(m.group(2)).map(TRANSFORMERS::get).orElse(UnaryOperator.identity());
 
             if (variable.equals("ALIAS")) {
@@ -198,7 +219,7 @@ public class UsernameTemplateMapper extends AbstractIdentityProviderMapper {
         }
         m.appendTail(sb);
 
-        Target t = getTarget(mapperModel.getConfig().get(TARGET));
+        UsernameTemplateMapper.Target t = getTarget(mapperModel.getConfig().get(TARGET));
         t.set(context, sb.toString());
     }
 
