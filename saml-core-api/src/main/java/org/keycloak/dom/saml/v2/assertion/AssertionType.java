@@ -54,9 +54,9 @@ public class AssertionType extends CommonAssertionType {
 
     private ConditionsType conditions;
 
-    private final Set<StatementAbstractType> statements = new LinkedHashSet<StatementAbstractType>();
+    private final Set<StatementAbstractType> statements = new LinkedHashSet<>();
 
-    private final Set<XacmlResourceType> xacmlResources = new LinkedHashSet<XacmlResourceType>();
+    private final Set<XacmlResourceType> xacmlResources = new LinkedHashSet<>();
 
     /**
      * Create an assertion

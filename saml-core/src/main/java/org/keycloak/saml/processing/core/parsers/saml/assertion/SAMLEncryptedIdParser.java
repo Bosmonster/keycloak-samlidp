@@ -1,6 +1,6 @@
 package org.keycloak.saml.processing.core.parsers.saml.assertion;
 
-import org.keycloak.dom.saml.v2.assertion.SamlEncryptedId;
+import org.keycloak.dom.saml.v2.assertion.SAMLEncryptedId;
 import org.keycloak.saml.processing.core.parsers.saml.xmlsec.EncryptedDataParser;
 import org.keycloak.saml.processing.core.parsers.saml.xmlsec.EncryptedKeyParser;
 import org.keycloak.dom.xmlsec.w3.xmlenc.EncryptedKeyType;
@@ -12,25 +12,25 @@ import javax.xml.stream.XMLEventReader;
 import javax.xml.stream.events.Attribute;
 import javax.xml.stream.events.StartElement;
 
-public class SamlEncryptedIdParser extends AbstractStaxSamlAssertionParser<SamlEncryptedId> {
+public class SAMLEncryptedIdParser extends AbstractStaxSamlAssertionParser<SAMLEncryptedId> {
 
-    private static final SamlEncryptedIdParser INSTANCE = new SamlEncryptedIdParser(SAMLAssertionQNames.ENCRYPTED_ID);
+    private static final SAMLEncryptedIdParser INSTANCE = new SAMLEncryptedIdParser(SAMLAssertionQNames.ENCRYPTED_ID);
 
-    public SamlEncryptedIdParser(SAMLAssertionQNames expectedStartElement) {
+    public SAMLEncryptedIdParser(SAMLAssertionQNames expectedStartElement) {
         super(expectedStartElement);
     }
 
-    public static SamlEncryptedIdParser getInstance() {
+    public static SAMLEncryptedIdParser getInstance() {
         return INSTANCE;
     }
 
     @Override
-    protected SamlEncryptedId instantiateElement(XMLEventReader xmlEventReader, StartElement startElement) throws ParsingException {
-        return new SamlEncryptedId();
+    protected SAMLEncryptedId instantiateElement(XMLEventReader xmlEventReader, StartElement startElement) throws ParsingException {
+        return new SAMLEncryptedId();
     }
 
     @Override
-    protected void processSubElement(XMLEventReader xmlEventReader, SamlEncryptedId target, SAMLAssertionQNames element, StartElement elementDetail) throws ParsingException {
+    protected void processSubElement(XMLEventReader xmlEventReader, SAMLEncryptedId target, SAMLAssertionQNames element, StartElement elementDetail) throws ParsingException {
         switch (element) {
             case  ENCRYPTED_DATA:
                 target.setEncryptedData(EncryptedDataParser.getInstance().parse(xmlEventReader));

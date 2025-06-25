@@ -16,6 +16,8 @@
  */
 package org.keycloak.dom.saml.v2.metadata;
 
+import org.keycloak.dom.saml.v2.assertion.AttributeType;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -52,7 +54,7 @@ public class AttributeConsumingServiceType {
 
     protected List<LocalizedNameType> serviceDescription = new ArrayList<>();
 
-    protected List<RequestedAttributeType> requestedAttribute = new ArrayList<>();
+    protected List<AttributeType> requestedAttribute = new ArrayList<>();
 
     protected int index;
 
@@ -94,7 +96,7 @@ public class AttributeConsumingServiceType {
      * <p>
      * Objects of the following type(s) are allowed in the list {@link RequestedAttributeType }
      */
-    public void addRequestedAttribute(RequestedAttributeType req) {
+    public void addRequestedAttribute(AttributeType req) {
         this.requestedAttribute.add(req);
     }
 
@@ -148,7 +150,7 @@ public class AttributeConsumingServiceType {
      * <p>
      * Objects of the following type(s) are allowed in the list {@link RequestedAttributeType }
      */
-    public List<RequestedAttributeType> getRequestedAttribute() {
+    public List<AttributeType> getRequestedAttribute() {
         return Collections.unmodifiableList(this.requestedAttribute);
     }
 

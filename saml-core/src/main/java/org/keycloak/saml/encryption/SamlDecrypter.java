@@ -3,7 +3,6 @@ package org.keycloak.saml.encryption;
 import org.keycloak.dom.saml.v2.assertion.AttributeStatementType;
 import org.keycloak.dom.saml.v2.assertion.SAMLEncryptedAttribute;
 import org.keycloak.dom.saml.v2.assertion.SAMLEncryptedType;
-import org.jboss.logging.Logger;
 import org.keycloak.dom.saml.v2.assertion.NameIDType;
 import org.keycloak.dom.xmlsec.w3.xmlenc.EncryptedKeyType;
 import org.keycloak.saml.common.exceptions.ParsingException;
@@ -19,10 +18,10 @@ import javax.xml.stream.XMLStreamException;
 import java.io.ByteArrayInputStream;
 import java.security.GeneralSecurityException;
 import java.security.PrivateKey;
+import java.util.Arrays;
 import java.util.Base64;
 
 public class SamlDecrypter {
-    protected static final Logger logger = Logger.getLogger(SamlDecrypter.class);
 
     public static byte[] decrypt(SAMLEncryptedType encryptedType, PrivateKey key) throws DecryptionException {
         if(encryptedType.getEncryptedData() == null) {
@@ -45,8 +44,8 @@ public class SamlDecrypter {
             XMLEventReader xmlEventReader = getXmlEventReader(decryptedAttribute);
             return new AttributeStatementType.ASTChoiceType(SAMLAttributeParser.getInstance().parse(xmlEventReader));
         } catch (XMLStreamException | ParsingException e) {
-            logger.errorf("Error creating ASTChoiceType from attribute `%s`", decryptedAttribute);
-            throw new DecryptionException(e);
+            String errorMessage = "Error creating ASTChoiceType from attribute " + Arrays.toString(decryptedAttribute);
+            throw new DecryptionException(errorMessage, e);
         }
     }
 
@@ -56,8 +55,8 @@ public class SamlDecrypter {
             XMLEventReader xmlEventReader = getXmlEventReader(decryptedAttribute);
             return SAMLParserUtil.parseNameIDType(xmlEventReader);
         } catch (XMLStreamException | ParsingException e) {
-            logger.errorf("Error creating NameIDType from attribute `%s`", decryptedAttribute);
-            throw new DecryptionException(e);
+            String errorMessage ="Error creating NameIDType from attribute " + Arrays.toString(decryptedAttribute);
+            throw new DecryptionException(errorMessage, e);
         }
     }
 
@@ -83,8 +82,7 @@ public class SamlDecrypter {
             decryptCipher.init(Cipher.DECRYPT_MODE, keySpec, ivSpec);
             return decryptCipher.doFinal(encDataWithoutIV);
         } catch (GeneralSecurityException e) {
-            logger.error("Error while decrypting value.", e);
-            throw new DecryptionException(e);
+            throw new DecryptionException("Error while decrypting value.", e);
         }
     }
 
@@ -98,7 +96,6 @@ public class SamlDecrypter {
                 length = 16;
                 break;
         }
-        logger.debugf("Algorithm `%s` means an IV length of %d", algorithm, length);
         return length;
     }
 
@@ -108,8 +105,7 @@ public class SamlDecrypter {
             decryptCipher.init(Cipher.DECRYPT_MODE, key);
             return decryptCipher.doFinal(encryptedSymmetricKey);
         } catch (GeneralSecurityException e) {
-            logger.error("Error while decrypting symmetric key.", e);
-            throw new DecryptionException(e);
+            throw new DecryptionException("Error while decrypting symmetric key.", e);
         }
     }
 

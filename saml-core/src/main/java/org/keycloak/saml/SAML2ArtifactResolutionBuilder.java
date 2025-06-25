@@ -1,6 +1,5 @@
 package org.keycloak.saml;
 
-import org.jboss.logging.Logger;
 import org.keycloak.dom.saml.v2.assertion.NameIDType;
 import org.keycloak.dom.saml.v2.protocol.ArtifactResolveType;
 import org.keycloak.saml.common.constants.GeneralConstants;
@@ -17,8 +16,6 @@ import org.w3c.dom.Document;
 import java.io.ByteArrayOutputStream;
 
 public class SAML2ArtifactResolutionBuilder {
-
-    protected static final Logger logger = Logger.getLogger(SAML2ArtifactResolutionBuilder.class);
 
     private final ArtifactResolveType artifactResolveType;
     protected String artifact;
@@ -52,10 +49,8 @@ public class SAML2ArtifactResolutionBuilder {
             writer.write(artifactResolveType);
 
             String output = new String(bos.toByteArray(), GeneralConstants.SAML_CHARSET);
-            logger.tracef("SAMLResolve query to send to endpoint: %s", output);
             return DocumentUtil.getDocument(output);
         } catch (ParsingException | ConfigurationException | ProcessingException e) {
-            logger.errorf("Could not convert %s to a document. Throwing RuntimeException.", artifactResolveType);
             throw new RuntimeException("Could not convert " + artifactResolveType + " to a document.", e);
         }
     }

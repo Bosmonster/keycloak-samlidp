@@ -28,7 +28,9 @@ import org.keycloak.crypto.KeyWrapper;
 import org.keycloak.dom.saml.v2.assertion.AssertionType;
 import org.keycloak.dom.saml.v2.assertion.AttributeStatementType;
 import org.keycloak.dom.saml.v2.assertion.AttributeType;
+import org.keycloak.dom.saml.v2.assertion.SAMLEncryptedId;
 import org.keycloak.dom.saml.v2.assertion.NameIDType;
+import org.keycloak.dom.saml.v2.assertion.SAMLEncryptedType;
 import org.keycloak.dom.saml.v2.metadata.AttributeConsumingServiceType;
 import org.keycloak.dom.saml.v2.metadata.EntityDescriptorType;
 import org.keycloak.dom.saml.v2.metadata.RequestedAttributeType;
@@ -41,6 +43,8 @@ import org.keycloak.protocol.saml.mappers.SamlMetadataDescriptorUpdater;
 import org.keycloak.provider.ProviderConfigProperty;
 import org.keycloak.saml.common.constants.JBossSAMLURIConstants;
 import org.keycloak.saml.common.util.StringUtil;
+import org.keycloak.saml.encryption.DecryptionException;
+import org.keycloak.saml.encryption.SamlDecrypter;
 
 import java.nio.charset.StandardCharsets;
 import java.security.PrivateKey;
@@ -71,6 +75,7 @@ public class UserAttributeMapper extends AbstractIdentityProviderMapper implemen
     public static final String ATTRIBUTE_DECRYPT = "attribute.decrypt";
     public static final String ATTRIBUTE_XACML_CONTEXT = "attribute.xacml-context";
     public static final String ATTRIBUTE_NAME = "attribute.name";
+    public static final String ATTRIBUTE_VALUE = "attribute.value";
     public static final String ATTRIBUTE_FRIENDLY_NAME = "attribute.friendly.name";
     public static final String ATTRIBUTE_NAME_FORMAT = "attribute.name.format";
     public static final String USER_ATTRIBUTE = "user.attribute";
@@ -261,7 +266,7 @@ public class UserAttributeMapper extends AbstractIdentityProviderMapper implemen
         if(Boolean.valueOf(mapperModel.getConfig().get(XML_ELEMENT_AS_ATTRIBUTE))) {
             value = Base64.getEncoder().encodeToString(value.getBytes(StandardCharsets.UTF_8));
         } else if(Boolean.valueOf(mapperModel.getConfig().get(ATTRIBUTE_DECRYPT))) {
-            if(object instanceof SamlEncryptedId) {
+            if(object instanceof SAMLEncryptedId) {
                 try {
                     NameIDType nameID = SamlDecrypter.decryptToNameID((SAMLEncryptedType) object, (PrivateKey) keys.getPrivateKey());
                     value = nameID.getValue();
@@ -269,11 +274,9 @@ public class UserAttributeMapper extends AbstractIdentityProviderMapper implemen
                     try {
                         value = new String(SamlDecrypter.decrypt((SAMLEncryptedType) object, (PrivateKey) keys.getPrivateKey()));
                     } catch (DecryptionException ex) {
-                        logger.error("Error when decrypting attribute to plain text.", e);
+                        throw new SecurityException("Error when decrypting attribute to plain text.", ex);
                     }
                 }
-            } else {
-                logger.warnf("Object ('%s') not of type EncryptedID cannot be decrypted.", object.getClass().getName());
             }
         }
         return value;

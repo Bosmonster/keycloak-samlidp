@@ -71,6 +71,7 @@ public class SAMLIdentityProviderConfig extends IdentityProviderModel {
     public static final String ALLOW_CREATE = "allowCreate";
     public static final String ATTRIBUTE_CONSUMING_SERVICE_INDEX = "attributeConsumingServiceIndex";
     public static final String ATTRIBUTE_CONSUMING_SERVICE_NAME = "attributeConsumingServiceName";
+    public static final String ATTRIBUTE_CONSUMING_SERVICE_METADATA = "attributeConsumingServiceMetadata";
     public static final String USE_METADATA_DESCRIPTOR_URL = "useMetadataDescriptorUrl";
     public static final String ASSERTION_CONSUMING_SERVICE_INDEX = "assertionConsumingServiceIndex";
     public static final String ARTIFACT_RESOLUTION = "artifactResolution";

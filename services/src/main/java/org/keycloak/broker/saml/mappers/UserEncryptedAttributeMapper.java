@@ -11,7 +11,10 @@ import org.keycloak.crypto.KeyWrapper;
 import org.keycloak.dom.saml.v2.assertion.AssertionType;
 import org.keycloak.dom.saml.v2.assertion.AttributeStatementType;
 import org.keycloak.dom.saml.v2.assertion.AttributeType;
+import org.keycloak.dom.saml.v2.assertion.SAMLEncryptedAttribute;
+import org.keycloak.dom.saml.v2.metadata.AttributeConsumingServiceType;
 import org.keycloak.dom.saml.v2.metadata.EntityDescriptorType;
+import org.keycloak.dom.saml.v2.metadata.RequestedAttributeValueType;
 import org.keycloak.models.IdentityProviderMapperModel;
 import org.keycloak.models.IdentityProviderSyncMode;
 import org.keycloak.models.KeycloakSession;
@@ -21,6 +24,8 @@ import org.keycloak.protocol.saml.mappers.SamlMetadataDescriptorUpdater;
 import org.keycloak.provider.ProviderConfigProperty;
 import org.keycloak.saml.common.constants.JBossSAMLURIConstants;
 import org.keycloak.saml.common.util.StringUtil;
+import org.keycloak.saml.encryption.DecryptionException;
+import org.keycloak.saml.encryption.SamlDecrypter;
 
 import java.security.PrivateKey;
 import java.util.ArrayList;
@@ -214,10 +219,10 @@ public class UserEncryptedAttributeMapper extends AbstractIdentityProviderMapper
                 if(attributeName.equals(attribute.getName())) {
                     return attribute.getAttributeValue();
                 }
-            } catch (DecryptionException e) {
-                logger.warnf("Something went wrong decrypting value of attribute (%s).", attributeName);
+            } catch (DecryptionException ex) {
+                String errorMessage = "Something went wrong decrypting value of attribute" +  attributeName + ".";
+                throw new SecurityException(errorMessage, ex);
             }
-            logger.warnf("Decrypted XML empty or not of type NameID. Returning original value.");
         }
         return returnValue;
     }

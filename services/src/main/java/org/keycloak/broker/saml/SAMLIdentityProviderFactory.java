@@ -19,6 +19,7 @@ package org.keycloak.broker.saml;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.io.UnsupportedEncodingException;
+import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -72,7 +73,7 @@ public class SAMLIdentityProviderFactory extends AbstractIdentityProviderFactory
     @Override
     public Map<String, String> parseConfig(KeycloakSession session, String xmlContent) {
         try {
-            InputStream inputStream = new ByteArrayInputStream(xmlContent.getBytes("UTF-8"));
+            InputStream inputStream = new ByteArrayInputStream(xmlContent.getBytes(StandardCharsets.UTF_8));
 
             // Use the XML content string for parsing
             SAMLParser parser = SAMLParser.getInstance();
@@ -193,8 +194,6 @@ public class SAMLIdentityProviderFactory extends AbstractIdentityProviderFactory
             }
         } catch (ParsingException pe) {
             throw new RuntimeException("Could not parse IdP SAML Metadata", pe);
-        } catch (UnsupportedEncodingException e) {
-            throw new RuntimeException(e);
         }
         return new HashMap<>();
     }

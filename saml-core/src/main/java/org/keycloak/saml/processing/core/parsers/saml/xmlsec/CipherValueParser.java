@@ -1,8 +1,6 @@
 package org.keycloak.saml.processing.core.parsers.saml.xmlsec;
 
 import org.keycloak.saml.processing.core.parsers.saml.assertion.SAMLAssertionQNames;
-import org.keycloak.saml.common.PicketLinkLogger;
-import org.keycloak.saml.common.PicketLinkLoggerFactory;
 import org.keycloak.saml.common.constants.JBossSAMLURIConstants;
 import org.keycloak.saml.common.exceptions.ParsingException;
 import org.keycloak.saml.common.parsers.StaxParser;
@@ -18,8 +16,6 @@ import java.nio.charset.StandardCharsets;
  *
  */
 public class CipherValueParser implements StaxParser {
-
-    private static final PicketLinkLogger logger = PicketLinkLoggerFactory.getLogger();
 
     private static final CipherValueParser INSTANCE = new CipherValueParser();
     private static final QName NIL = new QName(JBossSAMLURIConstants.XSI_NSURI.get(), "nil", JBossSAMLURIConstants.XSI_PREFIX.get());

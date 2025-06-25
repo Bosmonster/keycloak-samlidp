@@ -130,10 +130,13 @@ import static org.keycloak.saml.common.constants.JBossSAMLURIConstants.ATTRIBUTE
 public class SAMLIdentityProvider extends AbstractIdentityProvider<SAMLIdentityProviderConfig> {
     protected static final Logger logger = Logger.getLogger(SAMLIdentityProvider.class);
 
+    protected final SAMLIdentityProviderConfig config;
+
     private final DestinationValidator destinationValidator;
     public SAMLIdentityProvider(KeycloakSession session, SAMLIdentityProviderConfig config, DestinationValidator destinationValidator) {
         super(session, config);
         this.destinationValidator = destinationValidator;
+        this.config = config;
     }
 
     @Override
@@ -197,7 +200,7 @@ public class SAMLIdentityProvider extends AbstractIdentityProvider<SAMLIdentityP
                     .requestedAuthnContext(requestedAuthnContext)
                     .subject(loginHint);
 
-            JaxrsSAML2BindingBuilder binding = new JaxrsSAML2BindingBuilder(session)
+            JaxrsSAML2BindingBuilder binding = new JaxrsSAML2BindingBuilder(session, config)
                     .relayState(request.getState().getEncoded());
             boolean postBinding = getConfig().isPostBindingAuthnRequest();
 
@@ -359,7 +362,7 @@ public class SAMLIdentityProvider extends AbstractIdentityProvider<SAMLIdentityP
     }
 
     private JaxrsSAML2BindingBuilder buildLogoutBinding(KeycloakSession session, UserSessionModel userSession, RealmModel realm) {
-        JaxrsSAML2BindingBuilder binding = new JaxrsSAML2BindingBuilder(session)
+        JaxrsSAML2BindingBuilder binding = new JaxrsSAML2BindingBuilder(session, config)
                 .relayState(userSession.getId());
         if (getConfig().isWantAuthnRequestsSigned()) {
             KeyManager.ActiveRsaKey keys = session.keys().getActiveRsaKey(realm);
@@ -691,7 +694,7 @@ public class SAMLIdentityProvider extends AbstractIdentityProvider<SAMLIdentityP
     }
 
     private JaxrsSAML2BindingBuilder buildArtifactResolveBinding(KeycloakSession session, String relayState, RealmModel realm) {
-        JaxrsSAML2BindingBuilder binding = new JaxrsSAML2BindingBuilder(session).relayState(relayState);
+        JaxrsSAML2BindingBuilder binding = new JaxrsSAML2BindingBuilder(session, config).relayState(relayState);
         if (getConfig().isWantAuthnRequestsSigned()) {
             KeyManager.ActiveRsaKey keys = session.keys().getActiveRsaKey(realm);
             String keyName = getConfig().getXmlSigKeyInfoKeyNameTransformer().getKeyName(keys.getKid(), keys.getCertificate());

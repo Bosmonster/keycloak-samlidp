@@ -28,6 +28,7 @@ import org.keycloak.dom.saml.v2.assertion.AssertionType;
 import org.keycloak.dom.saml.v2.assertion.AttributeStatementType;
 import org.keycloak.dom.saml.v2.assertion.AttributeType;
 import org.keycloak.dom.saml.v2.assertion.NameIDType;
+import org.keycloak.dom.saml.v2.assertion.SAMLEncryptedId;
 import org.keycloak.dom.saml.v2.assertion.SubjectType;
 import org.keycloak.models.IdentityProviderMapperModel;
 import org.keycloak.models.IdentityProviderSyncMode;
@@ -36,6 +37,8 @@ import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserModel;
 import org.keycloak.models.utils.KeycloakModelUtils;
 import org.keycloak.provider.ProviderConfigProperty;
+import org.keycloak.saml.encryption.DecryptionException;
+import org.keycloak.saml.encryption.SamlDecrypter;
 
 import java.security.PrivateKey;
 import java.util.ArrayList;
@@ -71,7 +74,7 @@ public class UsernameTemplateMapper extends AbstractIdentityProviderMapper {
 
     public static final Map<String, UnaryOperator<String>> TRANSFORMERS = new HashMap<>();
 
-    private static final List<ProviderConfigProperty> configProperties = new ArrayList<ProviderConfigProperty>();
+    private static final List<ProviderConfigProperty> configProperties = new ArrayList<>();
     private static final Set<IdentityProviderSyncMode> IDENTITY_PROVIDER_SYNC_MODES = new HashSet<>(Arrays.asList(IdentityProviderSyncMode.values()));
 
     private static KeyWrapper keys;
@@ -116,12 +119,13 @@ public class UsernameTemplateMapper extends AbstractIdentityProviderMapper {
 
     public static String decrypt(Object attribute) {
         try {
-            if(attribute instanceof SamlEncryptedId) {
-                NameIDType nameID = SamlDecrypter.decryptToNameID((SamlEncryptedId)attribute, (PrivateKey) keys.getPrivateKey());
+            if(attribute instanceof SAMLEncryptedId) {
+                NameIDType nameID = SamlDecrypter.decryptToNameID((SAMLEncryptedId)attribute, (PrivateKey) keys.getPrivateKey());
                 return nameID.getValue();
             }
-        } catch (DecryptionException e) {
-            logger.errorf("Error decrypting attribute `%s`", attribute, e);
+        } catch (DecryptionException ex) {
+            String errorMessage = "Error decrypting attribute "+ attribute;
+            throw new SecurityException(errorMessage, ex);
         }
         return attribute.toString();
     }
@@ -185,7 +189,7 @@ public class UsernameTemplateMapper extends AbstractIdentityProviderMapper {
         while (m.find()) {
             String variable = m.group(1).trim();
             String transformerKey = m.group(2);
-            UnaryOperator<String> transformer = Optional.ofNullable(m.group(2)).map(TRANSFORMERS::get).orElse(UnaryOperator.identity());
+            UnaryOperator<String> transformer = Optional.ofNullable(transformerKey).map(TRANSFORMERS::get).orElse(UnaryOperator.identity());
 
             if (variable.equals("ALIAS")) {
                 m.appendReplacement(sb, transformer.apply(context.getIdpConfig().getAlias()));

@@ -6,7 +6,7 @@ import org.keycloak.models.KeycloakSessionFactory;
 import org.keycloak.services.resource.RealmResourceProvider;
 import org.keycloak.services.resource.RealmResourceProviderFactory;
 
-public class SamlEndpointProviderFactory implements RealmResourceProviderFactory {
+public class SAMLEndpointProviderFactory implements RealmResourceProviderFactory {
 
 
     public static final String ID = "samlconfig";
@@ -23,7 +23,7 @@ public class SamlEndpointProviderFactory implements RealmResourceProviderFactory
 
     @Override
     public RealmResourceProvider create(KeycloakSession keycloakSession) {
-        return new SamlEndpointProvider(keycloakSession);
+        return new SAMLEndpointProvider(keycloakSession);
     }
 
     @Override

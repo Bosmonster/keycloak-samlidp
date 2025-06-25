@@ -19,15 +19,11 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.List;
-import java.util.logging.Logger;
 
 
+public class SAMLEndpointProvider implements RealmResourceProvider {
 
-public class SamlEndpointProvider implements RealmResourceProvider {
-    private static final Logger logger = Logger.getLogger(SamlEndpointProvider.class.getName());
-
-
-    public SamlEndpointProvider(KeycloakSession keycloakSession) {
+    public SAMLEndpointProvider(KeycloakSession keycloakSession) {
     }
 
     @Override

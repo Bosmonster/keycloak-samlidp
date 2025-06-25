@@ -239,7 +239,7 @@ public class SAMLEndpoint {
             }
         }
 
-        protected Response basicChecks(String samlRequest, String samlResponse, String samlArt) {
+        protected Response basicChecks(String samlRequest, String samlResponse) {
             if (!checkSsl()) {
                 event.event(EventType.LOGIN);
                 event.error(Errors.SSL_REQUIRED);
@@ -251,7 +251,7 @@ public class SAMLEndpoint {
                 return ErrorPage.error(session, null, Response.Status.BAD_REQUEST, Messages.REALM_NOT_ENABLED);
             }
 
-            if (samlRequest == null && samlResponse == null&& samlArt == null) {
+            if (samlRequest == null && samlResponse == null) {
                 event.event(EventType.LOGIN);
                 event.error(Errors.INVALID_REQUEST);
                 return ErrorPage.error(session, null, Response.Status.BAD_REQUEST, Messages.INVALID_REQUEST);
@@ -295,7 +295,7 @@ public class SAMLEndpoint {
             return new HardcodedKeyLocator(keys);
         }
 
-        public Response execute(String samlArtifact, String relayState, String clientId) {
+        public Response execute(String samlArtifact, String relayState) {
             event = new EventBuilder(realm, session, clientConnection);
             String issuerURL = getEntityId(session.getContext().getUri(), realm);
             String samlResponse = provider.resolveArtifact(samlArtifact, issuerURL, realm);
@@ -402,7 +402,7 @@ public class SAMLEndpoint {
             builder.logoutRequestID(request.getID());
             builder.destination(config.getSingleLogoutServiceUrl());
             builder.issuer(issuerURL);
-            JaxrsSAML2BindingBuilder binding = new JaxrsSAML2BindingBuilder(session)
+            JaxrsSAML2BindingBuilder binding = new JaxrsSAML2BindingBuilder(session, config)
                         .relayState(relayState);
             boolean postBinding = config.isPostBindingLogout();
             if (config.isWantAuthnRequestsSigned()) {
@@ -421,11 +421,7 @@ public class SAMLEndpoint {
                 } else {
                     return binding.redirectBinding(builder.buildDocument()).response(config.getSingleLogoutServiceUrl());
                 }
-            } catch (ConfigurationException e) {
-                throw new RuntimeException(e);
-            } catch (ProcessingException e) {
-                throw new RuntimeException(e);
-            } catch (IOException e) {
+            } catch (ConfigurationException | ProcessingException | IOException e) {
                 throw new RuntimeException(e);
             }
 

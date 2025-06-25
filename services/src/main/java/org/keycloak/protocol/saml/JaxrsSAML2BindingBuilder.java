@@ -25,6 +25,7 @@ import jakarta.xml.soap.SOAPMessage;
 import org.apache.http.HttpHeaders;
 import org.apache.http.HttpHost;
 import org.apache.http.HttpResponse;
+import org.apache.http.HttpStatus;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.config.CookieSpecs;
 import org.apache.http.client.config.RequestConfig;
@@ -33,6 +34,7 @@ import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.ssl.SSLContexts;
+import org.jboss.logging.Logger;
 import org.keycloak.broker.saml.SAMLIdentityProviderConfig;
 import org.keycloak.connections.httpclient.HttpClientProvider;
 import org.keycloak.connections.httpclient.ProxyMappings;
@@ -48,6 +50,7 @@ import org.keycloak.saml.common.constants.GeneralConstants;
 import org.keycloak.saml.common.exceptions.ConfigurationException;
 import org.keycloak.saml.common.exceptions.ProcessingException;
 import org.keycloak.saml.common.util.DocumentUtil;
+import org.keycloak.saml.processing.web.util.RedirectBindingUtil;
 import org.keycloak.utils.StringUtil;
 import org.w3c.dom.Document;
 
@@ -58,8 +61,10 @@ import jakarta.ws.rs.core.Response;
 
 import javax.net.ssl.SSLContext;
 import javax.xml.XMLConstants;
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
 import java.security.GeneralSecurityException;
 import java.security.KeyManagementException;
@@ -75,6 +80,8 @@ import java.security.cert.CertificateException;
  * @version $Revision: 1 $
  */
 public class JaxrsSAML2BindingBuilder extends BaseSAML2BindingBuilder<JaxrsSAML2BindingBuilder> {
+
+    protected static final Logger logger = Logger.getLogger(JaxrsSAML2BindingBuilder.class);
 
     public static final String KEYSTORE_ALIAS = "key";
 
@@ -202,14 +209,11 @@ public class JaxrsSAML2BindingBuilder extends BaseSAML2BindingBuilder<JaxrsSAML2
             String entity = DocumentUtil.getDocumentAsString(document);
 
             if (getConfig().isArtifactResolutionSOAP()) {
-                logger.debug("Put ArtifactResolve message in SOAP envelope.");
                 entity = getSoapMessage(document);
             }
             if (getConfig().isArtifactResolutionWithXmlHeader()) {
-                logger.debug("Adding xml header to ArtifactResolve message.");
                 entity = "<?xml version=\"1.0\" encoding=\"" + getConfig().getCharSet().name() + "\"?>" + entity;
             }
-            logger.tracef("Artifact Resolve message: %s", entity);
             post.setEntity(new StringEntity(entity));
             post.setHeader(HttpHeaders.CONTENT_TYPE, MediaType.TEXT_XML_TYPE.withCharset(getConfig().getCharSet().name()).toString());
             post.setHeader(HttpHeaders.ACCEPT, MediaType.TEXT_XML_TYPE.withCharset(getConfig().getCharSet().name()).toString());
@@ -228,6 +232,57 @@ public class JaxrsSAML2BindingBuilder extends BaseSAML2BindingBuilder<JaxrsSAML2
             message.writeTo(bos);
             return bos.toString();
         }
+    }
+
+    private String readHttpResponse(HttpResponse httpResponse, URI artifactResolutionEndpoint) throws IOException, ProcessingException {
+        boolean wasBase64 = false;
+
+        int statusCode = httpResponse.getStatusLine().getStatusCode();
+        if (HttpStatus.SC_OK == statusCode) {
+            InputStream content = httpResponse.getEntity().getContent();
+            String response = new String(content.readAllBytes(), getConfig().getCharSet());
+
+            if (isBase64String(response)) {
+                wasBase64 = true;
+                try (InputStream decodedStream = RedirectBindingUtil.base64DeflateDecode(response)) {
+                    response = new String(decodedStream.readAllBytes());
+                } catch (IOException e) {
+                    throw new ProcessingException("Error decoding Base64 response", e);
+                }
+            }
+
+
+            if (getConfig().isArtifactResolutionWithXmlHeader()) {
+                response = response.replaceAll("<\\?xml(.+)\\?>", "");
+            }
+            if (getConfig().isArtifactResolutionSOAP()) {
+                try {
+                    SOAPMessage soapResponse = MessageFactory
+                            .newInstance()
+                            .createMessage(null, new ByteArrayInputStream(response.getBytes(getConfig().getCharSet())));
+                    Document document = soapResponse.getSOAPBody().extractContentAsDocument();
+                    response = DocumentUtil.getDocumentAsString(document);
+//                  response = response.replaceAll("ec:", "");
+                } catch (ConfigurationException | SOAPException e) {
+                    logger.warn("ArtifactResponse not a valid SOAP message; was expecting one, ignoring for now.");
+                }
+            }
+
+
+            if (wasBase64) {
+                response = RedirectBindingUtil.base64Encode(response.getBytes(getConfig().getCharSet()));
+            }
+            return response;
+        }else {
+            logger.warnf("Response from endpoint (%s) was not 200 but %s. Returning empty response.", artifactResolutionEndpoint.toString(), statusCode);
+        }
+        return "";
+
+
+    }
+
+    private boolean isBase64String(String response) {
+        return response.matches("^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{2}==)?$");
     }
 
     public static class RedirectBindingBuilder extends BaseRedirectBindingBuilder {

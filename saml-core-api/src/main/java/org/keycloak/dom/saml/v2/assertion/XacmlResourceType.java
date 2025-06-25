@@ -6,11 +6,11 @@ import java.util.LinkedHashSet;
 import java.util.Set;
 
 public class XacmlResourceType {
-    private final Set<AttributeType> attributes = new LinkedHashSet<AttributeType>();
+    private final Set<AttributeType> attributes = new LinkedHashSet<>();
     /**
      * Add a set of attributes
      *
-     * @param xacmlResources {@link Collection}
+     * @param attributeTypes {@link Collection}
      */
     public void addAttributes(Set<AttributeType> attributeTypes) {
 
