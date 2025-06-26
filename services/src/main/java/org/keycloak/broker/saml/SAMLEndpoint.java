@@ -52,7 +52,7 @@ import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserSessionModel;
 import org.keycloak.protocol.LoginProtocol;
 import org.keycloak.protocol.LoginProtocolFactory;
-import org.keycloak.protocol.saml.JaxrsSAML2BindingBuilder;
+import org.keycloak.protocol.saml.JaxrsSAML2BindingBuilderWithConfig;
 import org.keycloak.protocol.saml.SamlProtocol;
 import org.keycloak.protocol.saml.SamlProtocolUtils;
 import org.keycloak.protocol.saml.SamlService;
@@ -69,7 +69,6 @@ import org.keycloak.saml.common.exceptions.ProcessingException;
 import org.keycloak.saml.common.util.DocumentUtil;
 import org.keycloak.saml.processing.core.saml.v2.common.SAMLDocumentHolder;
 import org.keycloak.saml.processing.core.saml.v2.constants.X500SAMLProfileConstants;
-import org.keycloak.saml.processing.core.saml.v2.util.ArtifactResponseUtil;
 import org.keycloak.saml.processing.core.saml.v2.util.AssertionUtil;
 import org.keycloak.saml.processing.core.util.XMLEncryptionUtil;
 import org.keycloak.saml.processing.core.util.XMLSignatureUtil;
@@ -402,7 +401,7 @@ public class SAMLEndpoint {
             builder.logoutRequestID(request.getID());
             builder.destination(config.getSingleLogoutServiceUrl());
             builder.issuer(issuerURL);
-            JaxrsSAML2BindingBuilder binding = new JaxrsSAML2BindingBuilder(session, config)
+            JaxrsSAML2BindingBuilderWithConfig binding = new JaxrsSAML2BindingBuilderWithConfig(session, config)
                         .relayState(relayState);
             boolean postBinding = config.isPostBindingLogout();
             if (config.isWantAuthnRequestsSigned()) {
