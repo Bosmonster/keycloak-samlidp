@@ -90,7 +90,6 @@ public class SAMLIdentityProviderConfig extends IdentityProviderModel {
     public static final String SERVICE_NAME = "serviceName";
     public static final String FRIENDLY_NAME = "friendlyName";
     public static final String ATTRIBUTE_NAME = "attributeName";
-
     public static final String ATTRIBUTE_VALUE = "attributeValue";
 
     public SAMLIdentityProviderConfig() {

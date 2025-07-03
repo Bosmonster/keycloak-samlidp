@@ -51,13 +51,13 @@ import org.w3c.dom.Element;
  */
 public class SAMLIdentityProviderFactory extends AbstractIdentityProviderFactory<SAMLIdentityProvider> {
 
-    public static final String PROVIDER_ID = "saml-extended";
+    public static final String PROVIDER_ID = "saml";
 
     private DestinationValidator destinationValidator;
 
     @Override
     public String getName() {
-        return "SAML v2.0 - Extended";
+        return "SAML v2.0";
     }
 
     @Override
