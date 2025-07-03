@@ -30,10 +30,10 @@ export const SamlExtendedSettings = ({
                     {t("Metadata")}
                 </Title>
 
-                <Flex alignItems={{ default: "alignItemsFlexEnd" }} spaceItems={{ default: "spaceItemsMd" }}>
+                <Flex alignItems={{ default: "alignItemsCenter" }}>
                     <FlexItem>
                         <NumberControl
-                            name="config.metadataExpiresIn"
+                            name="config.metadataValidUntilUnit"
                             label={t("metadataExpiresIn")}
                             labelIcon={t("metadataExpiresInHelp")}
                             controller={{ defaultValue: 0, rules: { min: 0, max: 2147483 } }}
@@ -42,13 +42,14 @@ export const SamlExtendedSettings = ({
                     <FlexItem>
                         <SelectControl
                             name="config.metadataValidUntilPeriod"
-                            label={undefined}
-                            controller={{ defaultValue: "DAYS" }}
+                            label=" "
+                            aria-label="Select validity period"
+                            controller={{ defaultValue: "6" }}
                             options={[
-                                { key: "DAYS", value: t("days") },
-                                { key: "WEEKS", value: t("weeks") },
-                                { key: "MONTHS", value: t("months") },
-                                { key: "YEARS", value: t("years") },
+                                { key: "6", value: t("days") },
+                                { key: "3", value: t("weeks") },
+                                { key: "2", value: t("months") },
+                                { key: "1", value: t("years") },
                             ]}
                         />
                     </FlexItem>
@@ -79,7 +80,7 @@ export const SamlExtendedSettings = ({
                 />
 
                 <DefaultSwitchControl
-                    name="config.artifactResolutionServiceInMetadata"
+                    name="config.includeArtifactResolutionServiceMetadata"
                     label={t("includeArtifactResolutionServiceMetadata")}
                     labelIcon={t("includeArtifactResolutionServiceMetadataHelp")}
                     stringify
@@ -100,7 +101,7 @@ export const SamlExtendedSettings = ({
                 />
 
                 <DefaultSwitchControl
-                    name="config.artifactResolutionSoap"
+                    name="config.artifactResolutionSOAP"
                     label={t("artifactResolutionSoap")}
                     labelIcon={t("artifactResolutionSoapHelp")}
                     stringify
@@ -142,7 +143,7 @@ export const SamlExtendedSettings = ({
                 />
 
                 <DefaultSwitchControl
-                    name="config.artifactResolutionMutualTls"
+                    name="config.mutualTls"
                     label={t("artifactResolutionMutualTls")}
                     labelIcon={t("artifactResolutionMutualTlsHelp")}
                     stringify
@@ -154,7 +155,7 @@ export const SamlExtendedSettings = ({
                 </Title>
 
                 <MultiCardInput
-                    name="config.attributeService"
+                    name="config.attributeConsumingServiceMetadata"
                     fieldKeys={[
                         { name: "serviceName", label: t("asServiceName") },
                         { name: "friendlyName", label: t("asFriendlyName") },
