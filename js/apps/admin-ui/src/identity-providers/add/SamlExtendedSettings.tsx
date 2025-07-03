@@ -94,13 +94,6 @@ export const SamlExtendedSettings = ({
                 />
 
                 <DefaultSwitchControl
-                    name="config.artifactResolutionHttpArtifact"
-                    label={t("artifactResolutionHttpArtifact")}
-                    labelIcon={t("artifactResolutionHttpArtifactHelp")}
-                    stringify
-                />
-
-                <DefaultSwitchControl
                     name="config.artifactResolutionSOAP"
                     label={t("artifactResolutionSoap")}
                     labelIcon={t("artifactResolutionSoapHelp")}
