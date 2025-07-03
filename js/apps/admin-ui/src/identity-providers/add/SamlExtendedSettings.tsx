@@ -30,7 +30,7 @@ export const SamlExtendedSettings = ({
                     {t("Metadata")}
                 </Title>
 
-                <Flex alignItems={{ default: "alignItemsFlexEnd" }} spaceItems={{ default: "spaceItemsMd" }}>
+                <Flex alignItems={{ default: "alignItemsCenter" }}>
                     <FlexItem>
                         <NumberControl
                             name="config.metadataValidUntilUnit"
@@ -42,7 +42,8 @@ export const SamlExtendedSettings = ({
                     <FlexItem>
                         <SelectControl
                             name="config.metadataValidUntilPeriod"
-                            label={undefined}
+                            label=" "
+                            aria-label="Select validity period"
                             controller={{ defaultValue: "6" }}
                             options={[
                                 { key: "6", value: t("days") },
